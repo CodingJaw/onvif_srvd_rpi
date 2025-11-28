@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <string.h>
 #include <getopt.h>
+#include <sstream>
 
 
 #include "daemon.h"
@@ -13,6 +14,7 @@
 // ---- gsoap ----
 #include "DeviceBinding.nsmap"
 #include "soapDeviceBindingService.h"
+#include "soapDeviceIOBindingService.h"
 #include "soapMediaBindingService.h"
 #include "soapPTZBindingService.h"
 #include "soapEventBindingService.h"
@@ -20,6 +22,26 @@
 #include "soapPullPointSubscriptionBindingService.h"
 #include "soapSubscriptionManagerBindingService.h"
 
+
+
+static bool parse_io_triplet(const char* arg, std::string& token, std::string& name, std::string& state)
+{
+    if(!arg)
+        return false;
+
+    std::stringstream ss(arg);
+
+    if(!std::getline(ss, token, ':'))
+        return false;
+
+    if(!std::getline(ss, name, ':'))
+        return false;
+
+    if(!std::getline(ss, state, ':'))
+        return false;
+
+    return !(token.empty() || name.empty() || state.empty());
+}
 
 
 
@@ -71,6 +93,8 @@ static const char *help_str =
         "       --move_down    [value] Set process to call for PTZ tilt down movement\n"
         "       --move_stop    [value] Set process to call for PTZ stop movement\n"
         "       --move_preset  [value] Set process to call for PTZ goto preset movement\n"
+        "       --dio_in       [t:n:s]  Add digital input token, label and idle state (open|closed)\n"
+        "       --dio_out      [t:n:s]  Add relay output token, label and state (active|inactive)\n"
         "  -v,  --version              Display daemon version\n"
         "  -h,  --help                 Display this help\n\n";
 
@@ -120,7 +144,10 @@ namespace LongOpts
         move_up,
         move_down,
         move_stop,
-        move_preset
+        move_preset,
+
+        dio_in,
+        dio_out
     };
 }
 
@@ -171,6 +198,10 @@ static const struct option long_opts[] =
     { "move_stop",     required_argument, NULL, LongOpts::move_stop    },
     { "move_preset",   required_argument, NULL, LongOpts::move_preset  },
 
+    //DeviceIO configuration
+    { "dio_in",        required_argument, NULL, LongOpts::dio_in       },
+    { "dio_out",       required_argument, NULL, LongOpts::dio_out      },
+
     { NULL,           no_argument,       NULL,  0                      }
 };
 
@@ -180,6 +211,7 @@ static const struct option long_opts[] =
 
 #define FOREACH_SERVICE(APPLY, soap)                    \
         APPLY(DeviceBindingService, soap)               \
+        APPLY(DeviceIOBindingService, soap)             \
         APPLY(MediaBindingService, soap)                \
         APPLY(PTZBindingService, soap)                  \
         APPLY(EventBindingService, soap)                \
@@ -451,6 +483,38 @@ void processing_cmd(int argc, char *argv[])
             case LongOpts::move_preset:
                         if( !service_ctx.get_ptz_node()->set_move_preset(optarg) )
                             daemon_error_exit("Can't set process for goto preset movement: %s\n", service_ctx.get_ptz_node()->get_cstr_err());
+
+                        break;
+
+
+            case LongOpts::dio_in:
+                        {
+                            std::string token;
+                            std::string name;
+                            std::string state;
+
+                            if(!parse_io_triplet(optarg, token, name, state))
+                                daemon_error_exit("Can't parse digital input description: %s\n", optarg);
+
+                            if(!service_ctx.add_digital_input(token.c_str(), name.c_str(), state.c_str()))
+                                daemon_error_exit("Can't add digital input: %s\n", service_ctx.get_cstr_err());
+                        }
+
+                        break;
+
+
+            case LongOpts::dio_out:
+                        {
+                            std::string token;
+                            std::string name;
+                            std::string state;
+
+                            if(!parse_io_triplet(optarg, token, name, state))
+                                daemon_error_exit("Can't parse relay output description: %s\n", optarg);
+
+                            if(!service_ctx.add_relay_output(token.c_str(), name.c_str(), state.c_str()))
+                                daemon_error_exit("Can't add relay output: %s\n", service_ctx.get_cstr_err());
+                        }
 
                         break;
 

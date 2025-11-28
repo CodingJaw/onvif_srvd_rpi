@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wsdl:definitions name="DeviceIO" targetNamespace="http://www.onvif.org/ver10/deviceIO/wsdl"
+    xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:tmd="http://www.onvif.org/ver10/deviceIO/wsdl"
+    xmlns:tt="http://www.onvif.org/ver10/schema">
+
+    <wsdl:types>
+        <xs:schema targetNamespace="http://www.onvif.org/ver10/deviceIO/wsdl" elementFormDefault="qualified">
+            <xs:import namespace="http://www.onvif.org/ver10/schema" schemaLocation="onvif.xsd"/>
+
+            <xs:element name="GetServiceCapabilities">
+                <xs:complexType>
+                    <xs:sequence/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="GetServiceCapabilitiesResponse">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="Capabilities" type="tt:DeviceIOCapabilities"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="GetDigitalInputs">
+                <xs:complexType>
+                    <xs:sequence/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="GetDigitalInputsResponse">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="DigitalInputs" type="tt:DigitalInput" minOccurs="0" maxOccurs="unbounded"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="GetDigitalOutputs">
+                <xs:complexType>
+                    <xs:sequence/>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="GetDigitalOutputsResponse">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="DigitalOutputs" type="tt:RelayOutput" minOccurs="0" maxOccurs="unbounded"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="SetRelayOutputState">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="RelayOutputToken" type="tt:ReferenceToken"/>
+                        <xs:element name="LogicalState" type="tt:RelayLogicalState"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element name="SetRelayOutputStateResponse">
+                <xs:complexType>
+                    <xs:sequence/>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    </wsdl:types>
+
+    <wsdl:message name="GetServiceCapabilitiesRequest">
+        <wsdl:part name="parameters" element="tmd:GetServiceCapabilities"/>
+    </wsdl:message>
+    <wsdl:message name="GetServiceCapabilitiesResponse">
+        <wsdl:part name="parameters" element="tmd:GetServiceCapabilitiesResponse"/>
+    </wsdl:message>
+
+    <wsdl:message name="GetDigitalInputsRequest">
+        <wsdl:part name="parameters" element="tmd:GetDigitalInputs"/>
+    </wsdl:message>
+    <wsdl:message name="GetDigitalInputsResponse">
+        <wsdl:part name="parameters" element="tmd:GetDigitalInputsResponse"/>
+    </wsdl:message>
+
+    <wsdl:message name="GetDigitalOutputsRequest">
+        <wsdl:part name="parameters" element="tmd:GetDigitalOutputs"/>
+    </wsdl:message>
+    <wsdl:message name="GetDigitalOutputsResponse">
+        <wsdl:part name="parameters" element="tmd:GetDigitalOutputsResponse"/>
+    </wsdl:message>
+
+    <wsdl:message name="SetRelayOutputStateRequest">
+        <wsdl:part name="parameters" element="tmd:SetRelayOutputState"/>
+    </wsdl:message>
+    <wsdl:message name="SetRelayOutputStateResponse">
+        <wsdl:part name="parameters" element="tmd:SetRelayOutputStateResponse"/>
+    </wsdl:message>
+
+    <wsdl:portType name="DeviceIOPort">
+        <wsdl:operation name="GetServiceCapabilities">
+            <wsdl:input message="tmd:GetServiceCapabilitiesRequest"/>
+            <wsdl:output message="tmd:GetServiceCapabilitiesResponse"/>
+        </wsdl:operation>
+        <wsdl:operation name="GetDigitalInputs">
+            <wsdl:input message="tmd:GetDigitalInputsRequest"/>
+            <wsdl:output message="tmd:GetDigitalInputsResponse"/>
+        </wsdl:operation>
+        <wsdl:operation name="GetDigitalOutputs">
+            <wsdl:input message="tmd:GetDigitalOutputsRequest"/>
+            <wsdl:output message="tmd:GetDigitalOutputsResponse"/>
+        </wsdl:operation>
+        <wsdl:operation name="SetRelayOutputState">
+            <wsdl:input message="tmd:SetRelayOutputStateRequest"/>
+            <wsdl:output message="tmd:SetRelayOutputStateResponse"/>
+        </wsdl:operation>
+    </wsdl:portType>
+
+    <wsdl:binding name="DeviceIOBinding" type="tmd:DeviceIOPort">
+        <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+        <wsdl:operation name="GetServiceCapabilities">
+            <soap:operation soapAction="http://www.onvif.org/ver10/deviceio/wsdl/GetServiceCapabilities"/>
+            <wsdl:input>
+                <soap:body use="literal"/>
+            </wsdl:input>
+            <wsdl:output>
+                <soap:body use="literal"/>
+            </wsdl:output>
+        </wsdl:operation>
+        <wsdl:operation name="GetDigitalInputs">
+            <soap:operation soapAction="http://www.onvif.org/ver10/deviceio/wsdl/GetDigitalInputs"/>
+            <wsdl:input>
+                <soap:body use="literal"/>
+            </wsdl:input>
+            <wsdl:output>
+                <soap:body use="literal"/>
+            </wsdl:output>
+        </wsdl:operation>
+        <wsdl:operation name="GetDigitalOutputs">
+            <soap:operation soapAction="http://www.onvif.org/ver10/deviceio/wsdl/GetDigitalOutputs"/>
+            <wsdl:input>
+                <soap:body use="literal"/>
+            </wsdl:input>
+            <wsdl:output>
+                <soap:body use="literal"/>
+            </wsdl:output>
+        </wsdl:operation>
+        <wsdl:operation name="SetRelayOutputState">
+            <soap:operation soapAction="http://www.onvif.org/ver10/deviceio/wsdl/SetRelayOutputState"/>
+            <wsdl:input>
+                <soap:body use="literal"/>
+            </wsdl:input>
+            <wsdl:output>
+                <soap:body use="literal"/>
+            </wsdl:output>
+        </wsdl:operation>
+    </wsdl:binding>
+</wsdl:definitions>
