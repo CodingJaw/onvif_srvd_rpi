@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <ctime>
 
 #include "ServiceContext.h"
 #include "stools.h"
@@ -213,7 +214,11 @@ bool ServiceContext::add_digital_input(const char* token, const char* name, cons
         return false;
 
     if(!inputs_customized && !digital_inputs.empty())
+    {
         digital_inputs.clear();
+        std::lock_guard<std::mutex> lock(io_mutex);
+        input_states.clear();
+    }
 
     inputs_customized = true;
 
@@ -234,6 +239,11 @@ bool ServiceContext::add_digital_input(const char* token, const char* name, cons
     }
 
     digital_inputs.push_back({token, name, idle_state});
+
+    {
+        std::lock_guard<std::mutex> lock(io_mutex);
+        input_states[token] = {false, std::chrono::system_clock::now()};
+    }
     return true;
 }
 
@@ -244,7 +254,11 @@ bool ServiceContext::add_relay_output(const char* token, const char* name, const
         return false;
 
     if(!outputs_customized && !relay_outputs.empty())
+    {
         relay_outputs.clear();
+        std::lock_guard<std::mutex> lock(io_mutex);
+        output_states.clear();
+    }
 
     outputs_customized = true;
 
@@ -265,6 +279,11 @@ bool ServiceContext::add_relay_output(const char* token, const char* name, const
     }
 
     relay_outputs.push_back({token, name, logical_state, tt__RelayMode::Bistable, tt__RelayIdleState::open});
+
+    {
+        std::lock_guard<std::mutex> lock(io_mutex);
+        output_states[token] = {logical_state == tt__RelayLogicalState::active, std::chrono::system_clock::now()};
+    }
     return true;
 }
 
@@ -278,7 +297,13 @@ bool ServiceContext::set_relay_state(const std::string& token, tt__RelayLogicalS
         return false;
 
     found->logical_state = state;
-    return true;
+    return update_output_state(token, state == tt__RelayLogicalState::active, std::chrono::system_clock::now(), true);
+}
+
+
+bool ServiceContext::set_digital_input_state(const std::string& token, bool active)
+{
+    return update_input_state(token, active, std::chrono::system_clock::now(), true);
 }
 
 
@@ -291,6 +316,98 @@ tt__RelayLogicalState ServiceContext::get_relay_state(const std::string& token) 
         return tt__RelayLogicalState::inactive;
 
     return found->logical_state;
+}
+
+
+bool ServiceContext::get_input_status(const std::string& token, IOState& out) const
+{
+    std::lock_guard<std::mutex> lock(io_mutex);
+    auto it = input_states.find(token);
+    if(it == input_states.end())
+        return false;
+
+    out = it->second;
+    return true;
+}
+
+
+bool ServiceContext::get_output_status(const std::string& token, IOState& out) const
+{
+    std::lock_guard<std::mutex> lock(io_mutex);
+    auto it = output_states.find(token);
+    if(it == output_states.end())
+        return false;
+
+    out = it->second;
+    return true;
+}
+
+
+bool ServiceContext::update_input_state(const std::string& token, bool active, std::chrono::system_clock::time_point timestamp, bool emit_event)
+{
+    bool changed = false;
+
+    {
+        std::lock_guard<std::mutex> lock(io_mutex);
+        auto it = input_states.find(token);
+        if(it == input_states.end())
+            return false;
+
+        changed = it->second.active != active;
+        it->second.active = active;
+        it->second.last_change = timestamp;
+    }
+
+    if(emit_event && changed)
+        publish_state(input_topic(token), active, timestamp);
+
+    return true;
+}
+
+
+bool ServiceContext::update_output_state(const std::string& token, bool active, std::chrono::system_clock::time_point timestamp, bool emit_event)
+{
+    bool changed = false;
+
+    {
+        std::lock_guard<std::mutex> lock(io_mutex);
+        auto it = output_states.find(token);
+        if(it == output_states.end())
+            return false;
+
+        changed = it->second.active != active;
+        it->second.active = active;
+        it->second.last_change = timestamp;
+    }
+
+    if(emit_event && changed)
+        publish_state(relay_topic(token), active, timestamp);
+
+    return true;
+}
+
+
+std::string ServiceContext::format_timestamp(std::chrono::system_clock::time_point timestamp) const
+{
+    std::time_t t = std::chrono::system_clock::to_time_t(timestamp);
+    std::tm tm{};
+    gmtime_r(&t, &tm);
+
+    std::ostringstream os;
+    os << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+    return os.str();
+}
+
+
+std::string ServiceContext::input_topic(const std::string &token) const
+{
+    return "tns1:Device/IO/Input/" + token;
+}
+
+
+std::string ServiceContext::relay_topic(const std::string &token) const
+{
+    return "tns1:Device/IO/Relay/" + token;
 }
 
 
@@ -342,13 +459,27 @@ void ServiceContext::set_default_topics()
 }
 
 
+std::set<std::string> ServiceContext::get_event_topics() const
+{
+    std::lock_guard<std::mutex> lock(pull_point_mutex);
+    return event_topics;
+}
+
+
 void ServiceContext::publish_state(const std::string &topic, bool active)
 {
     auto now = std::chrono::system_clock::now();
+    publish_state(topic, active, now);
+}
+
+
+void ServiceContext::publish_state(const std::string &topic, bool active, std::chrono::system_clock::time_point timestamp)
+{
+    std::lock_guard<std::mutex> lock(pull_point_mutex);
 
     event_topics.insert(topic);
 
-    EventMessage msg{topic, active, now};
+    EventMessage msg{topic, active, timestamp};
 
     for(auto &pp : pull_points)
     {
@@ -367,6 +498,7 @@ std::string ServiceContext::create_pull_point(std::chrono::system_clock::time_po
     pp.reference   = os.str();
     pp.termination = termination_time;
 
+    std::lock_guard<std::mutex> lock(pull_point_mutex);
     pull_points.push_back(pp);
 
     return pp.reference;
@@ -375,6 +507,8 @@ std::string ServiceContext::create_pull_point(std::chrono::system_clock::time_po
 
 bool ServiceContext::renew_pull_point(const std::string &reference, std::chrono::system_clock::time_point termination_time)
 {
+    std::lock_guard<std::mutex> lock(pull_point_mutex);
+
     for(auto &pp : pull_points)
     {
         if(pp.reference == reference)
@@ -390,6 +524,8 @@ bool ServiceContext::renew_pull_point(const std::string &reference, std::chrono:
 
 bool ServiceContext::remove_pull_point(const std::string &reference)
 {
+    std::lock_guard<std::mutex> lock(pull_point_mutex);
+
     auto it = std::remove_if(pull_points.begin(), pull_points.end(), [&](const PullPoint &pp){ return pp.reference == reference;});
 
     if(it == pull_points.end())
@@ -402,6 +538,8 @@ bool ServiceContext::remove_pull_point(const std::string &reference)
 
 bool ServiceContext::pop_messages(const std::string &reference, size_t limit, std::vector<EventMessage> &out, std::chrono::system_clock::time_point &termination_time)
 {
+    std::lock_guard<std::mutex> lock(pull_point_mutex);
+
     for(auto &pp : pull_points)
     {
         if(pp.reference != reference)

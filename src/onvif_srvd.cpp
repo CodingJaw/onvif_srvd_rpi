@@ -11,6 +11,16 @@
 #include "smacros.h"
 #include "ServiceContext.h"
 
+#include <atomic>
+#include <chrono>
+#include <cstring>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sstream>
+#include <sys/socket.h>
+#include <thread>
+#include <unistd.h>
+
 // ---- gsoap ----
 #include "DeviceBinding.nsmap"
 #include "soapDeviceBindingService.h"
@@ -41,6 +51,167 @@ static bool parse_io_triplet(const char* arg, std::string& token, std::string& n
         return false;
 
     return !(token.empty() || name.empty() || state.empty());
+}
+
+
+namespace
+{
+    constexpr int LOCAL_CONTROL_PORT = 10100;
+    std::atomic<bool> local_control_running{false};
+    std::thread local_control_thread;
+
+    std::string build_http_response(int status_code, const std::string& body)
+    {
+        std::ostringstream os;
+        os << "HTTP/1.1 " << status_code << "\r\n";
+        os << "Content-Type: application/json\r\n";
+        os << "Content-Length: " << body.size() << "\r\n";
+        os << "Connection: close\r\n\r\n";
+        os << body;
+        return os.str();
+    }
+
+    bool parse_local_request(const std::string& request_line, std::string& token, bool& is_input, bool& active)
+    {
+        auto path_start = request_line.find(' ');
+        if(path_start == std::string::npos)
+            return false;
+
+        auto path_end = request_line.find(' ', path_start + 1);
+        if(path_end == std::string::npos)
+            return false;
+
+        auto path = request_line.substr(path_start + 1, path_end - path_start - 1);
+        if(path.rfind("/io", 0) != 0)
+            return false;
+
+        auto qpos = path.find('?');
+        if(qpos == std::string::npos)
+            return false;
+
+        auto query = path.substr(qpos + 1);
+        std::istringstream ss(query);
+        std::string pair;
+
+        while(std::getline(ss, pair, '&'))
+        {
+            auto eq = pair.find('=');
+            if(eq == std::string::npos)
+                continue;
+
+            auto key = pair.substr(0, eq);
+            auto value = pair.substr(eq + 1);
+
+            if(key == "type")
+                is_input = (value != "output");
+            else if(key == "token")
+                token = value;
+            else if(key == "state")
+                active = (value == "1" || value == "true" || value == "on" || value == "active");
+        }
+
+        return !token.empty();
+    }
+
+    void local_control_loop(ServiceContext* ctx)
+    {
+        int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+        if(server_fd < 0)
+            return;
+
+        sockaddr_in addr{};
+        addr.sin_family      = AF_INET;
+        addr.sin_port        = htons(LOCAL_CONTROL_PORT);
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+        if(bind(server_fd, (sockaddr*)&addr, sizeof(addr)) < 0)
+        {
+            close(server_fd);
+            return;
+        }
+
+        if(listen(server_fd, 4) < 0)
+        {
+            close(server_fd);
+            return;
+        }
+
+        local_control_running = true;
+
+        while(local_control_running)
+        {
+            int client = accept(server_fd, nullptr, nullptr);
+            if(client < 0)
+                continue;
+
+            char buffer[1024];
+            auto received = recv(client, buffer, sizeof(buffer) - 1, 0);
+
+            int status = 200;
+            std::string body;
+
+            if(received > 0)
+            {
+                buffer[received] = '\0';
+                std::string token;
+                bool is_input = true;
+                bool active = false;
+
+                if(parse_local_request(buffer, token, is_input, active))
+                {
+                    bool ok = false;
+                    ServiceContext::IOState snapshot{};
+
+                    if(is_input)
+                    {
+                        ok = ctx->set_digital_input_state(token, active);
+                        ctx->get_input_status(token, snapshot);
+                    }
+                    else
+                    {
+                        ok = ctx->set_relay_state(token, active ? tt__RelayLogicalState::active : tt__RelayLogicalState::inactive);
+                        ctx->get_output_status(token, snapshot);
+                    }
+
+                    if(ok)
+                    {
+                        body = std::string("{\"token\":\"") + token + "\",\"state\":" + (snapshot.active ? "true" : "false") +
+                               ",\"lastChange\":\"" + ctx->format_timestamp(snapshot.last_change) + "\"}";
+                    }
+                    else
+                    {
+                        status = 404;
+                        body = "{\"error\":\"Unknown token\"}";
+                    }
+                }
+                else
+                {
+                    status = 400;
+                    body = "{\"error\":\"Invalid request\"}";
+                }
+            }
+            else
+            {
+                status = 400;
+                body = "{\"error\":\"Empty request\"}";
+            }
+
+            auto response = build_http_response(status, body);
+            send(client, response.c_str(), response.size(), 0);
+            close(client);
+        }
+
+        close(server_fd);
+    }
+
+    void start_local_control(ServiceContext* ctx)
+    {
+        if(local_control_running)
+            return;
+
+        local_control_thread = std::thread(local_control_loop, ctx);
+        local_control_thread.detach();
+    }
 }
 
 
@@ -577,6 +748,7 @@ void init(void *data)
     init_signals();
     check_service_ctx();
     init_gsoap();
+    start_local_control(&service_ctx);
 }
 
 

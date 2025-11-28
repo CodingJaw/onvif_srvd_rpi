@@ -8,6 +8,7 @@
 #include <set>
 #include <deque>
 #include <chrono>
+#include <mutex>
 
 #include "soapH.h"
 #include "eth_dev_param.h"
@@ -189,10 +190,12 @@ class ServiceContext
         // Event helpers
         void set_default_topics();
         void publish_state(const std::string& topic, bool active);
+        void publish_state(const std::string& topic, bool active, std::chrono::system_clock::time_point timestamp);
         std::string create_pull_point(std::chrono::system_clock::time_point termination_time);
         bool renew_pull_point(const std::string& reference, std::chrono::system_clock::time_point termination_time);
         bool remove_pull_point(const std::string& reference);
         bool pop_messages(const std::string& reference, size_t limit, std::vector<EventMessage>& out, std::chrono::system_clock::time_point& termination_time);
+        std::set<std::string> get_event_topics() const;
 
         // service capabilities
         tds__DeviceServiceCapabilities* getDeviceServiceCapabilities(struct soap* soap);
@@ -231,6 +234,12 @@ class ServiceContext
             tt__RelayIdleState     idle_state;
         };
 
+        struct IOState
+        {
+            bool active = false;
+            std::chrono::system_clock::time_point last_change;
+        };
+
         const std::vector<DigitalInput>& get_digital_inputs() const { return digital_inputs; }
         const std::vector<RelayOutput>&  get_relay_outputs()  const { return relay_outputs;  }
 
@@ -238,7 +247,11 @@ class ServiceContext
         bool add_digital_input(const char* token, const char* name, const char* state);
         bool add_relay_output (const char* token, const char* name, const char* state);
         bool set_relay_state  (const std::string& token, tt__RelayLogicalState state);
+        bool set_digital_input_state(const std::string& token, bool active);
+        bool get_input_status(const std::string& token, IOState& out) const;
+        bool get_output_status(const std::string& token, IOState& out) const;
         tt__RelayLogicalState get_relay_state(const std::string& token) const;
+        std::string format_timestamp(std::chrono::system_clock::time_point timestamp) const;
 
         tt__DeviceIOCapabilities*  getDeviceIOServiceCapabilities(struct soap* soap);
         tt__DeviceIOCapabilities*  getDeviceIOCapabilities       (struct soap* soap, const std::string &XAddr) const;
@@ -274,6 +287,17 @@ class ServiceContext
         std::vector<RelayOutput>  relay_outputs;
         bool inputs_customized  = false;
         bool outputs_customized = false;
+
+        std::map<std::string, IOState> input_states;
+        std::map<std::string, IOState> output_states;
+
+        mutable std::mutex pull_point_mutex;
+        mutable std::mutex io_mutex;
+
+        bool update_input_state(const std::string& token, bool active, std::chrono::system_clock::time_point timestamp, bool emit_event);
+        bool update_output_state(const std::string& token, bool active, std::chrono::system_clock::time_point timestamp, bool emit_event);
+        std::string input_topic(const std::string& token) const;
+        std::string relay_topic(const std::string& token) const;
 };
 
 
