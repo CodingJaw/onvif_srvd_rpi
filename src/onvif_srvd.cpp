@@ -15,6 +15,10 @@
 #include "soapDeviceBindingService.h"
 #include "soapMediaBindingService.h"
 #include "soapPTZBindingService.h"
+#include "soapEventBindingService.h"
+#include "soapNotificationProducerBindingService.h"
+#include "soapPullPointSubscriptionBindingService.h"
+#include "soapSubscriptionManagerBindingService.h"
 
 
 
@@ -178,6 +182,10 @@ static const struct option long_opts[] =
         APPLY(DeviceBindingService, soap)               \
         APPLY(MediaBindingService, soap)                \
         APPLY(PTZBindingService, soap)                  \
+        APPLY(EventBindingService, soap)                \
+        APPLY(NotificationProducerBindingService, soap) \
+        APPLY(PullPointSubscriptionBindingService, soap)\
+        APPLY(SubscriptionManagerBindingService, soap)  \
 
 
 /*
