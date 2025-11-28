@@ -31,7 +31,8 @@ int EventBindingService::GetEventProperties(
     tev__GetEventPropertiesResponse.TopicExpressionDialect.push_back("http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet");
     tev__GetEventPropertiesResponse.MessageContentFilterDialect.push_back("http://www.onvif.org/ver10/tev/messageContentFilter/ItemFilter");
 
-    for(const auto &topic : ctx->event_topics)
+    auto topics = ctx->get_event_topics();
+    for(const auto &topic : topics)
         tev__GetEventPropertiesResponse.TopicNamespaceLocation.push_back(topic);
 
     return SOAP_OK;
@@ -117,6 +118,15 @@ int PullPointSubscriptionBindingService::PullMessages(
                         simple->Name  = "State";
                         simple->Value = msg.active ? "true" : "false";
                         data->SimpleItem.push_back(simple);
+                    }
+
+                    auto last_change = soap_new_tt__SimpleItem(soap);
+                    auto ctx = (ServiceContext*)soap->user;
+                    if(last_change && ctx)
+                    {
+                        last_change->Name  = "LastChange";
+                        last_change->Value = ctx->format_timestamp(msg.timestamp);
+                        data->SimpleItem.push_back(last_change);
                     }
                 }
                 payload->Data = data;
