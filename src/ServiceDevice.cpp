@@ -71,6 +71,27 @@ int DeviceBindingService::GetServices(
     }
     tds__GetServicesResponse.Service.emplace_back(med_svc);
 
+    //Event Service
+    auto evt_svc = soap_new_tds__Service(soap);
+    if(evt_svc)
+    {
+        evt_svc->soap_default(soap);
+        evt_svc->Namespace = SOAP_NAMESPACE_OF_tev;
+        evt_svc->XAddr     = XAddr;
+        evt_svc->Version   = soap_new_req_tt__OnvifVersion(soap, 2, 8);
+
+        if( tds__GetServices->IncludeCapability )
+        {
+            auto evt_caps         = ctx->getEventServiceCapabilities(soap);
+            auto svc_caps         = soap_new_req__tev__GetServiceCapabilitiesResponse(soap, evt_caps);
+            evt_svc->Capabilities = soap_new_req__tds__Service_Capabilities(soap);
+
+            if(evt_svc->Capabilities)
+                evt_svc->Capabilities->__any.set(svc_caps, SOAP_TYPE_tds__DeviceServiceCapabilities);
+        }
+    }
+    tds__GetServicesResponse.Service.emplace_back(evt_svc);
+
 
     if(ctx->get_ptz_node()->enable)
         return SOAP_OK;

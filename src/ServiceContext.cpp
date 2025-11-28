@@ -3,6 +3,7 @@
 #include <stdlib.h> // defines getenv in POSIX
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
 
 #include "ServiceContext.h"
 #include "stools.h"
@@ -25,8 +26,10 @@ ServiceContext::ServiceContext():
     hardware_id      ( "HardwareId"     ),
 
     //private
+    pull_point_counter(0),
     tz_format(TZ_UTC_OFFSET)
 {
+    set_default_topics();
 }
 
 
@@ -192,6 +195,95 @@ std::string ServiceContext::getXAddr(struct soap *soap) const
 }
 
 
+void ServiceContext::set_default_topics()
+{
+    event_topics.insert("tns1:Device/IO/Input/0");
+    event_topics.insert("tns1:Device/IO/Relay/0");
+}
+
+
+void ServiceContext::publish_state(const std::string &topic, bool active)
+{
+    auto now = std::chrono::system_clock::now();
+
+    event_topics.insert(topic);
+
+    EventMessage msg{topic, active, now};
+
+    for(auto &pp : pull_points)
+    {
+        pp.queue.push_back(msg);
+    }
+}
+
+
+std::string ServiceContext::create_pull_point(std::chrono::system_clock::time_point termination_time)
+{
+    PullPoint pp;
+
+    std::ostringstream os;
+    os << "pullpoint-" << (++pull_point_counter);
+
+    pp.reference   = os.str();
+    pp.termination = termination_time;
+
+    pull_points.push_back(pp);
+
+    return pp.reference;
+}
+
+
+bool ServiceContext::renew_pull_point(const std::string &reference, std::chrono::system_clock::time_point termination_time)
+{
+    for(auto &pp : pull_points)
+    {
+        if(pp.reference == reference)
+        {
+            pp.termination = termination_time;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+bool ServiceContext::remove_pull_point(const std::string &reference)
+{
+    auto it = std::remove_if(pull_points.begin(), pull_points.end(), [&](const PullPoint &pp){ return pp.reference == reference;});
+
+    if(it == pull_points.end())
+        return false;
+
+    pull_points.erase(it, pull_points.end());
+    return true;
+}
+
+
+bool ServiceContext::pop_messages(const std::string &reference, size_t limit, std::vector<EventMessage> &out, std::chrono::system_clock::time_point &termination_time)
+{
+    for(auto &pp : pull_points)
+    {
+        if(pp.reference != reference)
+            continue;
+
+        termination_time = pp.termination;
+
+        size_t count = 0;
+        while(!pp.queue.empty() && count < limit)
+        {
+            out.push_back(pp.queue.front());
+            pp.queue.pop_front();
+            ++count;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+
 
 bool ServiceContext::add_profile(const StreamProfile &profile)
 {
@@ -339,6 +431,12 @@ tptz__Capabilities *ServiceContext::getPTZServiceCapabilities(struct soap *soap)
     auto caps = soap_new_req_tptz__Capabilities(soap);
 
     return caps;
+}
+
+
+tev__Capabilities *ServiceContext::getEventServiceCapabilities(struct soap *soap)
+{
+    return soap_new_req_tev__Capabilities(soap);
 }
 
 

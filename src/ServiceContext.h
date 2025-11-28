@@ -5,6 +5,9 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
+#include <deque>
+#include <chrono>
 
 #include "soapH.h"
 #include "eth_dev_param.h"
@@ -155,6 +158,7 @@ class ServiceContext
 
 
         std::vector<Eth_Dev_Param> eth_ifs; //ethernet interfaces
+        std::set<std::string> event_topics;
 
         std::string  get_time_zone() const;
 
@@ -182,16 +186,24 @@ class ServiceContext
         const std::map<std::string, StreamProfile> &get_profiles(void) { return profiles; }
         PTZNode* get_ptz_node(void) { return &ptz_node; }
 
+        // Event helpers
+        void set_default_topics();
+        void publish_state(const std::string& topic, bool active);
+        std::string create_pull_point(std::chrono::system_clock::time_point termination_time);
+        bool renew_pull_point(const std::string& reference, std::chrono::system_clock::time_point termination_time);
+        bool remove_pull_point(const std::string& reference);
+        bool pop_messages(const std::string& reference, size_t limit, std::vector<EventMessage>& out, std::chrono::system_clock::time_point& termination_time);
+
         // service capabilities
         tds__DeviceServiceCapabilities* getDeviceServiceCapabilities(struct soap* soap);
         trt__Capabilities*  getMediaServiceCapabilities    (struct soap* soap);
         tptz__Capabilities* getPTZServiceCapabilities      (struct soap* soap);
+        tev__Capabilities*  getEventServiceCapabilities    (struct soap* soap);
 //        timg__Capabilities* getImagingServiceCapabilities  (struct soap* soap);
 //        trc__Capabilities*  getRecordingServiceCapabilities(struct soap* soap);
 //        tse__Capabilities*  getSearchServiceCapabilities   (struct soap* soap);
 //        trv__Capabilities*  getReceiverServiceCapabilities (struct soap* soap);
 //        trp__Capabilities*  getReplayServiceCapabilities   (struct soap* soap);
-//        tev__Capabilities*  getEventServiceCapabilities    (struct soap* soap);
 //        tls__Capabilities*  getDisplayServiceCapabilities  (struct soap* soap);
 //        tmd__Capabilities*  getDeviceIOServiceCapabilities (struct soap* soap);
 
@@ -204,8 +216,25 @@ class ServiceContext
 
     private:
 
+        struct EventMessage
+        {
+            std::string topic;
+            bool active;
+            std::chrono::system_clock::time_point timestamp;
+        };
+
+        struct PullPoint
+        {
+            std::string reference;
+            std::deque<EventMessage> queue;
+            std::chrono::system_clock::time_point termination;
+        };
+
         std::map<std::string, StreamProfile> profiles;
         PTZNode ptz_node;
+
+        std::vector<PullPoint> pull_points;
+        unsigned int pull_point_counter;
 
         TimeZoneForamt tz_format;
 

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" targetNamespace="http://www.onvif.org/ver10/events/wsdl">
+  <wsdl:import namespace="http://www.onvif.org/ver10/events/wsdl" location="event.wsdl"/>
+</wsdl:definitions>
