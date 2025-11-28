@@ -214,6 +214,36 @@ class ServiceContext
 
         tt__NetworkInterface*   getNetworkInterface(struct soap* soap, const Eth_Dev_Param& eth_param) const;
 
+        // DeviceIO helpers
+        struct DigitalInput
+        {
+            std::string          token;
+            std::string          name;
+            tt__DigitalIdleState idle_state;
+        };
+
+        struct RelayOutput
+        {
+            std::string            token;
+            std::string            name;
+            tt__RelayLogicalState  logical_state;
+            tt__RelayMode          mode;
+            tt__RelayIdleState     idle_state;
+        };
+
+        const std::vector<DigitalInput>& get_digital_inputs() const { return digital_inputs; }
+        const std::vector<RelayOutput>&  get_relay_outputs()  const { return relay_outputs;  }
+
+        void ensure_default_io();
+        bool add_digital_input(const char* token, const char* name, const char* state);
+        bool add_relay_output (const char* token, const char* name, const char* state);
+        bool set_relay_state  (const std::string& token, tt__RelayLogicalState state);
+        tt__RelayLogicalState get_relay_state(const std::string& token) const;
+
+        tt__DeviceIOCapabilities*  getDeviceIOServiceCapabilities(struct soap* soap);
+        tt__DeviceIOCapabilities*  getDeviceIOCapabilities       (struct soap* soap, const std::string &XAddr) const;
+        tt__IOCapabilities*        getIOCapabilities             (struct soap* soap) const;
+
     private:
 
         struct EventMessage
@@ -239,6 +269,11 @@ class ServiceContext
         TimeZoneForamt tz_format;
 
         std::string  str_err;
+
+        std::vector<DigitalInput> digital_inputs;
+        std::vector<RelayOutput>  relay_outputs;
+        bool inputs_customized  = false;
+        bool outputs_customized = false;
 };
 
 

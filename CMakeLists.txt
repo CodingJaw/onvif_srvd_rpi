@@ -106,6 +106,7 @@ endif()
 set(SOAP_SOURCES
     ${GENERATED_DIR}/soapC.cpp
     ${GENERATED_DIR}/soapDeviceBindingService.cpp
+    ${GENERATED_DIR}/soapDeviceIOBindingService.cpp
     ${GENERATED_DIR}/soapMediaBindingService.cpp
     ${GENERATED_DIR}/soapPTZBindingService.cpp
     ${GENERATED_DIR}/soapEventBindingService.cpp
@@ -131,6 +132,7 @@ set(SOURCES
     ${COMMON_DIR}/eth_dev_param.cpp
     ${COMMON_DIR}/ServiceContext.cpp
     ${COMMON_DIR}/ServiceDevice.cpp
+    ${COMMON_DIR}/ServiceDeviceIO.cpp
     ${COMMON_DIR}/ServiceMedia.cpp
     ${COMMON_DIR}/ServicePTZ.cpp
     ${COMMON_DIR}/ServiceEvent.cpp
@@ -152,6 +154,7 @@ set(SOAP_HEADERS
     ${GENERATED_DIR}/soapH.h
     ${GENERATED_DIR}/soapStub.h
     ${GENERATED_DIR}/soapDeviceBindingService.h
+    ${GENERATED_DIR}/soapDeviceIOBindingService.h
     ${GENERATED_DIR}/soapMediaBindingService.h
     ${GENERATED_DIR}/soapPTZBindingService.h
     ${GENERATED_DIR}/soapEventBindingService.h
@@ -239,6 +242,7 @@ add_dependencies(${PROJECT_NAME} generate_version)
 set_source_files_properties(
     ${GENERATED_DIR}/soapC.cpp
     ${GENERATED_DIR}/soapDeviceBindingService.cpp
+    ${GENERATED_DIR}/soapDeviceIOBindingService.cpp
     ${GENERATED_DIR}/soapMediaBindingService.cpp
     ${GENERATED_DIR}/soapPTZBindingService.cpp
     ${GENERATED_DIR}/soapEventBindingService.cpp
@@ -249,6 +253,7 @@ set_source_files_properties(
     ${GENERATED_DIR}/soapH.h
     ${GENERATED_DIR}/soapStub.h
     ${GENERATED_DIR}/soapDeviceBindingService.h
+    ${GENERATED_DIR}/soapDeviceIOBindingService.h
     ${GENERATED_DIR}/soapMediaBindingService.h
     ${GENERATED_DIR}/soapPTZBindingService.h
     ${GENERATED_DIR}/soapEventBindingService.h

@@ -10,6 +10,7 @@
 #include <ctime>
 
 #include "soapDeviceBindingService.h"
+#include "soapDeviceIOBindingService.h"
 #include "ServiceContext.h"
 #include "smacros.h"
 #include "stools.h"
@@ -48,6 +49,27 @@ int DeviceBindingService::GetServices(
         }
     }
     tds__GetServicesResponse.Service.emplace_back(dev_svc);
+
+
+    //DeviceIO Service
+    auto dio_svc = soap_new_tds__Service(soap);
+    if(dio_svc)
+    {
+        dio_svc->soap_default(soap);
+        dio_svc->Namespace = SOAP_NAMESPACE_OF_tmd;
+        dio_svc->XAddr     = XAddr;
+        dio_svc->Version   = soap_new_req_tt__OnvifVersion(soap, 2, 0);
+
+        if( tds__GetServices->IncludeCapability )
+        {
+            auto dio_caps         = ctx->getDeviceIOServiceCapabilities(soap);
+            dio_svc->Capabilities = soap_new_req__tds__Service_Capabilities(soap);
+
+            if(dio_svc->Capabilities)
+                dio_svc->Capabilities->__any.set(dio_caps, SOAP_TYPE_tt__DeviceIOCapabilities);
+        }
+    }
+    tds__GetServicesResponse.Service.emplace_back(dio_svc);
 
 
     //Media Service
@@ -251,6 +273,18 @@ int DeviceBindingService::GetCapabilities(
         if( (category == tt__CapabilityCategory::All) || (category == tt__CapabilityCategory::Device) )
         {
             tds__GetCapabilitiesResponse.Capabilities->Device = ctx->getDeviceCapabilities(soap, XAddr);
+        }
+
+
+        if( (category == tt__CapabilityCategory::All) || (category == tt__CapabilityCategory::DeviceIO) )
+        {
+            if(!tds__GetCapabilitiesResponse.Capabilities->Device)
+                tds__GetCapabilitiesResponse.Capabilities->Device = ctx->getDeviceCapabilities(soap, XAddr);
+
+            if(tds__GetCapabilitiesResponse.Capabilities->Device)
+                tds__GetCapabilitiesResponse.Capabilities->Device->IO = ctx->getIOCapabilities(soap);
+
+            tds__GetCapabilitiesResponse.Capabilities->DeviceIO = ctx->getDeviceIOCapabilities(soap, XAddr);
         }
 
 

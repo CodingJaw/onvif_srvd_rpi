@@ -10,6 +10,44 @@
 #include "smacros.h"
 
 
+namespace
+{
+    bool parse_idle_state(const std::string& value, tt__DigitalIdleState& out)
+    {
+        if(value == "open")
+        {
+            out = tt__DigitalIdleState::open;
+            return true;
+        }
+
+        if(value == "closed")
+        {
+            out = tt__DigitalIdleState::closed;
+            return true;
+        }
+
+        return false;
+    }
+
+    bool parse_relay_state(const std::string& value, tt__RelayLogicalState& out)
+    {
+        if(value == "active")
+        {
+            out = tt__RelayLogicalState::active;
+            return true;
+        }
+
+        if(value == "inactive")
+        {
+            out = tt__RelayLogicalState::inactive;
+            return true;
+        }
+
+        return false;
+    }
+}
+
+
 
 
 ServiceContext::ServiceContext():
@@ -30,6 +68,21 @@ ServiceContext::ServiceContext():
     tz_format(TZ_UTC_OFFSET)
 {
     set_default_topics();
+    ensure_default_io();
+}
+
+
+void ServiceContext::ensure_default_io()
+{
+    if(!digital_inputs.empty() || !relay_outputs.empty())
+        return;
+
+    for(int i = 1; i <= 4; ++i)
+    {
+        auto idx = std::to_string(i);
+        add_digital_input(("Input" + idx).c_str(), ("Digital input " + idx).c_str(), "closed");
+        add_relay_output (("Output" + idx).c_str(), ("Relay output " + idx).c_str(), "inactive");
+    }
 }
 
 
@@ -151,6 +204,93 @@ bool ServiceContext::set_tz_format(const char* new_val)
 
     tz_format = static_cast<TimeZoneForamt>(tmp_val);
     return true;
+}
+
+
+bool ServiceContext::add_digital_input(const char* token, const char* name, const char* state)
+{
+    if(!token || !name || !state)
+        return false;
+
+    if(!inputs_customized && !digital_inputs.empty())
+        digital_inputs.clear();
+
+    inputs_customized = true;
+
+    tt__DigitalIdleState idle_state;
+    if(!parse_idle_state(state, idle_state))
+    {
+        str_err = "Digital input idle state must be 'open' or 'closed'";
+        return false;
+    }
+
+    auto duplicate = std::find_if(digital_inputs.begin(), digital_inputs.end(),
+        [&](const DigitalInput& input){ return input.token == token; });
+
+    if(duplicate != digital_inputs.end())
+    {
+        str_err = "Digital input token already exists";
+        return false;
+    }
+
+    digital_inputs.push_back({token, name, idle_state});
+    return true;
+}
+
+
+bool ServiceContext::add_relay_output(const char* token, const char* name, const char* state)
+{
+    if(!token || !name || !state)
+        return false;
+
+    if(!outputs_customized && !relay_outputs.empty())
+        relay_outputs.clear();
+
+    outputs_customized = true;
+
+    tt__RelayLogicalState logical_state;
+    if(!parse_relay_state(state, logical_state))
+    {
+        str_err = "Relay output state must be 'active' or 'inactive'";
+        return false;
+    }
+
+    auto duplicate = std::find_if(relay_outputs.begin(), relay_outputs.end(),
+        [&](const RelayOutput& output){ return output.token == token; });
+
+    if(duplicate != relay_outputs.end())
+    {
+        str_err = "Relay output token already exists";
+        return false;
+    }
+
+    relay_outputs.push_back({token, name, logical_state, tt__RelayMode::Bistable, tt__RelayIdleState::open});
+    return true;
+}
+
+
+bool ServiceContext::set_relay_state(const std::string& token, tt__RelayLogicalState state)
+{
+    auto found = std::find_if(relay_outputs.begin(), relay_outputs.end(),
+        [&](const RelayOutput& output){ return output.token == token; });
+
+    if(found == relay_outputs.end())
+        return false;
+
+    found->logical_state = state;
+    return true;
+}
+
+
+tt__RelayLogicalState ServiceContext::get_relay_state(const std::string& token) const
+{
+    auto found = std::find_if(relay_outputs.begin(), relay_outputs.end(),
+        [&](const RelayOutput& output){ return output.token == token; });
+
+    if(found == relay_outputs.end())
+        return tt__RelayLogicalState::inactive;
+
+    return found->logical_state;
 }
 
 
@@ -440,6 +580,42 @@ tev__Capabilities *ServiceContext::getEventServiceCapabilities(struct soap *soap
 }
 
 
+tt__DeviceIOCapabilities* ServiceContext::getDeviceIOServiceCapabilities(struct soap* soap)
+{
+    return getDeviceIOCapabilities(soap, getXAddr(soap));
+}
+
+
+tt__DeviceIOCapabilities* ServiceContext::getDeviceIOCapabilities(struct soap* soap, const std::string &XAddr) const
+{
+    auto caps = soap_new_tt__DeviceIOCapabilities(soap);
+    if(!caps)
+        return nullptr;
+
+    caps->XAddr         = XAddr;
+    caps->VideoSources  = 0;
+    caps->VideoOutputs  = 0;
+    caps->AudioSources  = 0;
+    caps->AudioOutputs  = 0;
+    caps->RelayOutputs  = static_cast<int>(relay_outputs.size());
+
+    return caps;
+}
+
+
+tt__IOCapabilities* ServiceContext::getIOCapabilities(struct soap* soap) const
+{
+    auto caps = soap_new_tt__IOCapabilities(soap);
+    if(!caps)
+        return nullptr;
+
+    caps->InputConnectors = soap_new_ptr(soap, static_cast<int>(digital_inputs.size()));
+    caps->RelayOutputs    = soap_new_ptr(soap, static_cast<int>(relay_outputs.size()));
+
+    return caps;
+}
+
+
 
 tt__DeviceCapabilities *ServiceContext::getDeviceCapabilities(struct soap *soap, const std::string &XAddr) const
 {
@@ -462,7 +638,7 @@ tt__DeviceCapabilities *ServiceContext::getDeviceCapabilities(struct soap *soap,
     }
 
 
-    dev_caps->IO       = soap_new_req_tt__IOCapabilities(soap);
+    dev_caps->IO       = getIOCapabilities(soap);
     dev_caps->Network  = soap_new_req_tt__NetworkCapabilities(soap);
     dev_caps->Security = soap_new_tt__SecurityCapabilities(soap);
 
