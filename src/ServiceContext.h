@@ -146,6 +146,9 @@ class ServiceContext
         int         port;
         std::string user;
         std::string password;
+        std::string rtsp_user;
+        std::string rtsp_password;
+        tt__TransportProtocol rtsp_transport;
 
 
         //Device Information
@@ -182,6 +185,9 @@ class ServiceContext
 
 
         std::string get_stream_uri(const std::string& profile_url, uint32_t client_ip) const;
+        std::string build_rtsp_uri(const StreamProfile& profile, const tt__StreamSetup* stream_setup, uint32_t client_ip) const;
+        bool is_transport_supported(const tt__StreamSetup* stream_setup) const;
+        bool set_rtsp_transport(const char* new_val);
 
 
         const std::map<std::string, StreamProfile> &get_profiles(void) { return profiles; }
