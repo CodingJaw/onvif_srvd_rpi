@@ -117,7 +117,7 @@ int MediaBindingService::GetStreamUri(
             return ret;
 
         if(!ctx->is_transport_supported(trt__GetStreamUri->StreamSetup))
-            return soap_senderfault(soap, "Unsupported transport", "Requested stream transport is not enabled");
+            return soap_senderfault("Unsupported transport", "Requested stream transport is not enabled");
 
         MediaUri->soap_default(soap);
         MediaUri->InvalidAfterConnect      = false;

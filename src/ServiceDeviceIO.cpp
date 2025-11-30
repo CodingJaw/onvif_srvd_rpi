@@ -2,21 +2,6 @@
 #include "ServiceContext.h"
 #include "smacros.h"
 #include "stools.h"
-#include "dom.h"
-
-namespace
-{
-    soap_dom_element* make_dom_element(struct soap* soap, const char* name, const std::string& value)
-    {
-        auto element = soap_new_dom_element(soap);
-        if(!element)
-            return nullptr;
-
-        element->name = name;
-        element->text(value.c_str());
-        return element;
-    }
-}
 
 
 int DeviceIOBindingService::GetServiceCapabilities(
@@ -46,19 +31,9 @@ int DeviceIOBindingService::GetDigitalInputs(
         if(!entry)
             continue;
 
-        entry->token = input.token;
-        entry->Name  = soap_new_std_string(soap, input.name);
+        entry->token     = input.token;
+        entry->name      = input.name.c_str();
         entry->IdleState = soap_new_ptr(soap, input.idle_state);
-
-        ServiceContext::IOState status{};
-        if(ctx->get_input_status(input.token, status))
-        {
-            if(auto state_node = make_dom_element(soap, "State", status.active ? "true" : "false"))
-                entry->__any.push_back(state_node);
-
-            if(auto ts_node = make_dom_element(soap, "LastChange", ctx->format_timestamp(status.last_change)))
-                entry->__any.push_back(ts_node);
-        }
 
         tmd__GetDigitalInputsResponse.DigitalInputs.push_back(entry);
     }
@@ -82,7 +57,7 @@ int DeviceIOBindingService::GetDigitalOutputs(
             continue;
 
         entry->token = output.token;
-        entry->Name  = soap_new_std_string(soap, output.name);
+        entry->name  = output.name.c_str();
 
         entry->Properties = soap_new_tt__RelayOutputSettings(soap);
         if(entry->Properties)
@@ -90,16 +65,6 @@ int DeviceIOBindingService::GetDigitalOutputs(
             entry->Properties->Mode      = output.mode;
             entry->Properties->DelayTime = 0;
             entry->Properties->IdleState = output.idle_state;
-        }
-
-        ServiceContext::IOState status{};
-        if(ctx->get_output_status(output.token, status))
-        {
-            if(auto state_node = make_dom_element(soap, "State", status.active ? "true" : "false"))
-                entry->__any.push_back(state_node);
-
-            if(auto ts_node = make_dom_element(soap, "LastChange", ctx->format_timestamp(status.last_change)))
-                entry->__any.push_back(ts_node);
         }
 
         tmd__GetDigitalOutputsResponse.DigitalOutputs.push_back(entry);

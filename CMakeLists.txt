@@ -109,10 +109,6 @@ set(SOAP_SOURCES
     ${GENERATED_DIR}/soapDeviceIOBindingService.cpp
     ${GENERATED_DIR}/soapMediaBindingService.cpp
     ${GENERATED_DIR}/soapPTZBindingService.cpp
-    ${GENERATED_DIR}/soapEventBindingService.cpp
-    ${GENERATED_DIR}/soapNotificationProducerBindingService.cpp
-    ${GENERATED_DIR}/soapPullPointSubscriptionBindingService.cpp
-    ${GENERATED_DIR}/soapSubscriptionManagerBindingService.cpp
 
     ${GSOAP_CUSTOM_DIR}/duration.c
 )
@@ -135,7 +131,6 @@ set(SOURCES
     ${COMMON_DIR}/ServiceDeviceIO.cpp
     ${COMMON_DIR}/ServiceMedia.cpp
     ${COMMON_DIR}/ServicePTZ.cpp
-    ${COMMON_DIR}/ServiceEvent.cpp
 
     ${SOAP_SOURCES}
     ${WSSE_SOURCES}
@@ -157,10 +152,6 @@ set(SOAP_HEADERS
     ${GENERATED_DIR}/soapDeviceIOBindingService.h
     ${GENERATED_DIR}/soapMediaBindingService.h
     ${GENERATED_DIR}/soapPTZBindingService.h
-    ${GENERATED_DIR}/soapEventBindingService.h
-    ${GENERATED_DIR}/soapNotificationProducerBindingService.h
-    ${GENERATED_DIR}/soapPullPointSubscriptionBindingService.h
-    ${GENERATED_DIR}/soapSubscriptionManagerBindingService.h
 )
 
 
@@ -245,10 +236,6 @@ set_source_files_properties(
     ${GENERATED_DIR}/soapDeviceIOBindingService.cpp
     ${GENERATED_DIR}/soapMediaBindingService.cpp
     ${GENERATED_DIR}/soapPTZBindingService.cpp
-    ${GENERATED_DIR}/soapEventBindingService.cpp
-    ${GENERATED_DIR}/soapNotificationProducerBindingService.cpp
-    ${GENERATED_DIR}/soapPullPointSubscriptionBindingService.cpp
-    ${GENERATED_DIR}/soapSubscriptionManagerBindingService.cpp
     ${GENERATED_DIR}/onvif.h
     ${GENERATED_DIR}/soapH.h
     ${GENERATED_DIR}/soapStub.h
@@ -256,10 +243,6 @@ set_source_files_properties(
     ${GENERATED_DIR}/soapDeviceIOBindingService.h
     ${GENERATED_DIR}/soapMediaBindingService.h
     ${GENERATED_DIR}/soapPTZBindingService.h
-    ${GENERATED_DIR}/soapEventBindingService.h
-    ${GENERATED_DIR}/soapNotificationProducerBindingService.h
-    ${GENERATED_DIR}/soapPullPointSubscriptionBindingService.h
-    ${GENERATED_DIR}/soapSubscriptionManagerBindingService.h
     ${GENERATED_DIR}/version.h
     PROPERTIES GENERATED TRUE
 )

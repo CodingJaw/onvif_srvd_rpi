@@ -69,10 +69,8 @@ ServiceContext::ServiceContext():
     hardware_id      ( "HardwareId"     ),
 
     //private
-    pull_point_counter(0),
     tz_format(TZ_UTC_OFFSET)
 {
-    set_default_topics();
     ensure_default_io();
     scopes.push_back("onvif://www.onvif.org/Profile/Streaming");
     scopes.push_back("onvif://www.onvif.org/Profile/S");
@@ -248,7 +246,10 @@ bool ServiceContext::add_digital_input(const char* token, const char* name, cons
 
     {
         std::lock_guard<std::mutex> lock(io_mutex);
-        input_states[token] = {false, std::chrono::system_clock::now()};
+        IOState state{};
+        state.active      = false;
+        state.last_change = std::chrono::system_clock::now();
+        input_states[token] = state;
     }
     return true;
 }
@@ -288,7 +289,10 @@ bool ServiceContext::add_relay_output(const char* token, const char* name, const
 
     {
         std::lock_guard<std::mutex> lock(io_mutex);
-        output_states[token] = {logical_state == tt__RelayLogicalState::active, std::chrono::system_clock::now()};
+        IOState state{};
+        state.active      = (logical_state == tt__RelayLogicalState::active);
+        state.last_change = std::chrono::system_clock::now();
+        output_states[token] = state;
     }
     return true;
 }
@@ -351,21 +355,17 @@ bool ServiceContext::get_output_status(const std::string& token, IOState& out) c
 
 bool ServiceContext::update_input_state(const std::string& token, bool active, std::chrono::system_clock::time_point timestamp, bool emit_event)
 {
-    bool changed = false;
-
     {
         std::lock_guard<std::mutex> lock(io_mutex);
         auto it = input_states.find(token);
         if(it == input_states.end())
             return false;
 
-        changed = it->second.active != active;
         it->second.active = active;
         it->second.last_change = timestamp;
     }
 
-    if(emit_event && changed)
-        publish_state(input_topic(token), active, timestamp);
+    UNUSED(emit_event);
 
     return true;
 }
@@ -373,21 +373,17 @@ bool ServiceContext::update_input_state(const std::string& token, bool active, s
 
 bool ServiceContext::update_output_state(const std::string& token, bool active, std::chrono::system_clock::time_point timestamp, bool emit_event)
 {
-    bool changed = false;
-
     {
         std::lock_guard<std::mutex> lock(io_mutex);
         auto it = output_states.find(token);
         if(it == output_states.end())
             return false;
 
-        changed = it->second.active != active;
         it->second.active = active;
         it->second.last_change = timestamp;
     }
 
-    if(emit_event && changed)
-        publish_state(relay_topic(token), active, timestamp);
+    UNUSED(emit_event);
 
     return true;
 }
@@ -457,115 +453,6 @@ std::string ServiceContext::getXAddr(struct soap *soap) const
     return os.str();
 }
 
-
-void ServiceContext::set_default_topics()
-{
-    event_topics.insert("tns1:Device/IO/Input/0");
-    event_topics.insert("tns1:Device/IO/Relay/0");
-}
-
-
-std::set<std::string> ServiceContext::get_event_topics() const
-{
-    std::lock_guard<std::mutex> lock(pull_point_mutex);
-    return event_topics;
-}
-
-
-void ServiceContext::publish_state(const std::string &topic, bool active)
-{
-    auto now = std::chrono::system_clock::now();
-    publish_state(topic, active, now);
-}
-
-
-void ServiceContext::publish_state(const std::string &topic, bool active, std::chrono::system_clock::time_point timestamp)
-{
-    std::lock_guard<std::mutex> lock(pull_point_mutex);
-
-    event_topics.insert(topic);
-
-    EventMessage msg{topic, active, timestamp};
-
-    for(auto &pp : pull_points)
-    {
-        pp.queue.push_back(msg);
-    }
-}
-
-
-std::string ServiceContext::create_pull_point(std::chrono::system_clock::time_point termination_time)
-{
-    PullPoint pp;
-
-    std::ostringstream os;
-    os << "pullpoint-" << (++pull_point_counter);
-
-    pp.reference   = os.str();
-    pp.termination = termination_time;
-
-    std::lock_guard<std::mutex> lock(pull_point_mutex);
-    pull_points.push_back(pp);
-
-    return pp.reference;
-}
-
-
-bool ServiceContext::renew_pull_point(const std::string &reference, std::chrono::system_clock::time_point termination_time)
-{
-    std::lock_guard<std::mutex> lock(pull_point_mutex);
-
-    for(auto &pp : pull_points)
-    {
-        if(pp.reference == reference)
-        {
-            pp.termination = termination_time;
-            return true;
-        }
-    }
-
-    return false;
-}
-
-
-bool ServiceContext::remove_pull_point(const std::string &reference)
-{
-    std::lock_guard<std::mutex> lock(pull_point_mutex);
-
-    auto it = std::remove_if(pull_points.begin(), pull_points.end(), [&](const PullPoint &pp){ return pp.reference == reference;});
-
-    if(it == pull_points.end())
-        return false;
-
-    pull_points.erase(it, pull_points.end());
-    return true;
-}
-
-
-bool ServiceContext::pop_messages(const std::string &reference, size_t limit, std::vector<EventMessage> &out, std::chrono::system_clock::time_point &termination_time)
-{
-    std::lock_guard<std::mutex> lock(pull_point_mutex);
-
-    for(auto &pp : pull_points)
-    {
-        if(pp.reference != reference)
-            continue;
-
-        termination_time = pp.termination;
-
-        size_t count = 0;
-        while(!pp.queue.empty() && count < limit)
-        {
-            out.push_back(pp.queue.front());
-            pp.queue.pop_front();
-            ++count;
-        }
-
-        return true;
-    }
-
-    return false;
-}
 
 
 
@@ -638,10 +525,10 @@ std::string ServiceContext::build_rtsp_uri(const StreamProfile &profile, const t
 
 bool ServiceContext::is_transport_supported(const tt__StreamSetup *stream_setup) const
 {
-    if(!stream_setup || !stream_setup->Transport || !stream_setup->Transport->Protocol)
+    if(!stream_setup || !stream_setup->Transport)
         return true;
 
-    auto requested = *stream_setup->Transport->Protocol;
+    auto requested = stream_setup->Transport->Protocol;
 
     if(requested == rtsp_transport)
         return true;
@@ -790,12 +677,6 @@ tptz__Capabilities *ServiceContext::getPTZServiceCapabilities(struct soap *soap)
     auto caps = soap_new_req_tptz__Capabilities(soap);
 
     return caps;
-}
-
-
-tev__Capabilities *ServiceContext::getEventServiceCapabilities(struct soap *soap)
-{
-    return soap_new_req_tev__Capabilities(soap);
 }
 
 
