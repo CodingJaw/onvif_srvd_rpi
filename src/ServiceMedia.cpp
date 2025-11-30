@@ -116,10 +116,13 @@ int MediaBindingService::GetStreamUri(
         if(!MediaUri)
             return ret;
 
+        if(!ctx->is_transport_supported(trt__GetStreamUri->StreamSetup))
+            return soap_senderfault(soap, "Unsupported transport", "Requested stream transport is not enabled");
+
         MediaUri->soap_default(soap);
         MediaUri->InvalidAfterConnect      = false;
         MediaUri->InvalidAfterReboot       = false;
-        MediaUri->Uri                      = ctx->get_stream_uri(it->second.get_url(), htonl(soap->ip));
+        MediaUri->Uri                      = ctx->build_rtsp_uri(it->second, trt__GetStreamUri->StreamSetup, htonl(soap->ip));
 
         trt__GetStreamUriResponse.MediaUri = MediaUri;
         ret                                = SOAP_OK;

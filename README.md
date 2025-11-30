@@ -101,6 +101,8 @@ To start the daemon, you have to give him the parameters that are needed for wor
 ```
 The `--url` option can contain or static IP or dynamic (template parameter `%s`) that will be replaced with the IP address of the interface, see the option `--ifs`.
 
+Default scopes now include `onvif://www.onvif.org/Profile/Streaming` and `onvif://www.onvif.org/Profile/S`, so devices that only look for Profile S advertise correctly even if you do not pass custom `--scope` parameters.
+
 For more details see help:
 ```console
 ./onvif_srvd --help
@@ -113,6 +115,35 @@ Or you can use [S90onvif_srvd](./start_scripts/S90onvif_srvd) script to start th
 
 If You use systemd see:
 [onvif_srvd.service](./start_scripts/onvif_srvd.service)
+
+
+### Annke interoperability notes
+
+Annke NVRs expect WS-Discovery announcements plus Profile S scopes and RTSP URLs that embed authentication. You can meet those expectations with the built-in defaults and the following options:
+
+* Run a WS-Discovery helper alongside `onvif_srvd`. The [wsdd](https://github.com/KoynovStas/wsdd) daemon matches the ONVIF schema; a minimal invocation looks like:
+
+  ```console
+  ./wsdd --if_name eth0 --type tdn:NetworkVideoTransmitter --xaddr http://%s:1000/onvif/device_service --scope "onvif://www.onvif.org/name/Annke onvif://www.onvif.org/Profile/S"
+  ```
+
+  This mirrors the scopes advertised by `onvif_srvd` and keeps Annke discovery stable.
+
+* Use the new RTSP options to mirror Annke defaults: `--rtsp_user admin --rtsp_pass 123456 --rtsp_transport tcp`. Credentials are injected into the returned RTSP URI automatically, so Annke recorders can connect without rewriting the URL.
+
+* Sample configuration that exposes Media, Event, and DeviceIO services together:
+
+  ```console
+  ./onvif_srvd \
+      --ifs eth0 \
+      --scope onvif://www.onvif.org/name/Annke \
+      --scope onvif://www.onvif.org/Profile/S \
+      --name AnnkeMain --width 1920 --height 1080 --url rtsp://%s:554/Streaming/Channels/101 --type H264 \
+      --rtsp_user admin --rtsp_pass 123456 --rtsp_transport tcp \
+      --dio_in Input1:Door:closed --dio_out Output1:Siren:inactive
+  ```
+
+  The event service auto-publishes state changes for the digital IOs, while DeviceIO exposes the same tokens for Annke alarm input/output binding.
 
 
 

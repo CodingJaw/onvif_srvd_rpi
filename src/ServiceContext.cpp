@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <ctime>
+#include <cctype>
 
 #include "ServiceContext.h"
 #include "stools.h"
@@ -55,6 +56,9 @@ ServiceContext::ServiceContext():
     port     ( 1000    ),
     user     ( "admin" ),
     password ( "admin" ),
+    rtsp_user(),
+    rtsp_password(),
+    rtsp_transport(tt__TransportProtocol::RTSP),
 
 
     //Device Information
@@ -70,6 +74,8 @@ ServiceContext::ServiceContext():
 {
     set_default_topics();
     ensure_default_io();
+    scopes.push_back("onvif://www.onvif.org/Profile/Streaming");
+    scopes.push_back("onvif://www.onvif.org/Profile/S");
 }
 
 
@@ -598,6 +604,81 @@ std::string ServiceContext::get_stream_uri(const std::string &profile_url, uint3
 
 
     return uri;
+}
+
+
+std::string ServiceContext::build_rtsp_uri(const StreamProfile &profile, const tt__StreamSetup *stream_setup, uint32_t client_ip) const
+{
+    UNUSED(stream_setup);
+
+    const auto effective_user     = rtsp_user.empty() ? user : rtsp_user;
+    const auto effective_password = rtsp_password.empty() ? password : rtsp_password;
+
+    auto uri = get_stream_uri(profile.get_url(), client_ip);
+
+    auto scheme_pos = uri.find("://");
+    if(scheme_pos != std::string::npos)
+    {
+        auto host_pos = scheme_pos + 3;
+
+        if(uri.find('@', host_pos) == std::string::npos && !effective_user.empty())
+        {
+            std::string credentials = effective_user;
+            if(!effective_password.empty())
+                credentials += ":" + effective_password;
+
+            credentials += "@";
+            uri.insert(host_pos, credentials);
+        }
+    }
+
+    return uri;
+}
+
+
+bool ServiceContext::is_transport_supported(const tt__StreamSetup *stream_setup) const
+{
+    if(!stream_setup || !stream_setup->Transport || !stream_setup->Transport->Protocol)
+        return true;
+
+    auto requested = *stream_setup->Transport->Protocol;
+
+    if(requested == rtsp_transport)
+        return true;
+
+    if(requested == tt__TransportProtocol::RTSP && rtsp_transport != tt__TransportProtocol::HTTP)
+        return true;
+
+    return false;
+}
+
+
+bool ServiceContext::set_rtsp_transport(const char *new_val)
+{
+    if(!new_val)
+    {
+        str_err = "transport is empty";
+        return false;
+    }
+
+    std::string value(new_val);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c){ return std::tolower(c); });
+
+    if(value == "rtsp")
+        rtsp_transport = tt__TransportProtocol::RTSP;
+    else if(value == "tcp")
+        rtsp_transport = tt__TransportProtocol::TCP;
+    else if(value == "udp")
+        rtsp_transport = tt__TransportProtocol::UDP;
+    else if(value == "http")
+        rtsp_transport = tt__TransportProtocol::HTTP;
+    else
+    {
+        str_err = "transport dont support";
+        return false;
+    }
+
+    return true;
 }
 
 

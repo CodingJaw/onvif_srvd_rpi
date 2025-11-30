@@ -241,6 +241,9 @@ static const char *help_str =
         "       --port         [value] Set socket port for Services   (default = 1000)\n"
         "       --user         [value] Set user name for Services     (default = admin)\n"
         "       --password     [value] Set user password for Services (default = admin)\n"
+        "       --rtsp_user    [value] Set RTSP authentication user   (default follows --user)\n"
+        "       --rtsp_pass    [value] Set RTSP authentication pass   (default follows --password)\n"
+        "       --rtsp_transport[value] Set RTSP transport (udp|tcp|rtsp|http)\n"
         "       --model        [value] Set model device for Services  (default = Model)\n"
         "       --scope        [value] Set scope for Services         (default don't set)\n"
         "       --ifs          [value] Set Net interfaces for work    (default don't set)\n"
@@ -291,6 +294,9 @@ namespace LongOpts
         port,
         user,
         password,
+        rtsp_user,
+        rtsp_pass,
+        rtsp_transport,
         manufacturer,
         model,
         firmware_ver,
@@ -343,6 +349,9 @@ static const struct option long_opts[] =
     { "port",         required_argument, NULL, LongOpts::port          },
     { "user",         required_argument, NULL, LongOpts::user          },
     { "password",     required_argument, NULL, LongOpts::password      },
+    { "rtsp_user",    required_argument, NULL, LongOpts::rtsp_user     },
+    { "rtsp_pass",    required_argument, NULL, LongOpts::rtsp_pass     },
+    { "rtsp_transport",required_argument,NULL, LongOpts::rtsp_transport},
     { "manufacturer", required_argument, NULL, LongOpts::manufacturer  },
     { "model",        required_argument, NULL, LongOpts::model         },
     { "firmware_ver", required_argument, NULL, LongOpts::firmware_ver  },
@@ -517,10 +526,27 @@ void processing_cmd(int argc, char *argv[])
 
             case LongOpts::user:
                         service_ctx.user = optarg;
+                        if(service_ctx.rtsp_user.empty())
+                            service_ctx.rtsp_user = service_ctx.user;
                         break;
 
             case LongOpts::password:
                         service_ctx.password = optarg;
+                        if(service_ctx.rtsp_password.empty())
+                            service_ctx.rtsp_password = service_ctx.password;
+                        break;
+
+            case LongOpts::rtsp_user:
+                        service_ctx.rtsp_user = optarg;
+                        break;
+
+            case LongOpts::rtsp_pass:
+                        service_ctx.rtsp_password = optarg;
+                        break;
+
+            case LongOpts::rtsp_transport:
+                        if(!service_ctx.set_rtsp_transport(optarg))
+                            daemon_error_exit("Can't set RTSP transport: %s\n", service_ctx.get_cstr_err());
                         break;
 
             case LongOpts::manufacturer:
